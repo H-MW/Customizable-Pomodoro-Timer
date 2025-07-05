@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>カスタマイズ可能ポモドーロタイマー</title>
+    <!-- Tailwind CSS CDNを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSSのカスタム設定 -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              "pastel-orange": "#FFDAB9", // パステルオレンジ（作業時間、プログレスバー勉強中）
+              "pastel-cyan": "#B2EBF2", // パステルシアン（休憩時間、プログレスバー休憩中）
+              "pastel-gray-text": "#5A5A5A", // テキスト用パステルグレー
+              "pastel-orange-darker": "#FFC080", // ボタンのボーダー用
+              "light-border": "#e0e0e0", // 文字列の罫線用
+            },
+          },
+        },
+      };
+    </script>
+    <!-- Interフォントを読み込み -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Google Fonts for custom fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto+Mono&family=Orbitron&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* 全体のスタイル設定 */
+      body {
+        font-family: "Inter", sans-serif; /* フォントをInterに設定 */
+        background-color: #ffffff; /* 背景色を白に */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 120vh; /* サイト全体に余裕を持たせ、スクロール可能にする */
+        min-width: 100vw; /* 横幅も最低100vw */
+        margin: 0;
+        color: #1a202c; /* デフォルトの文字色を濃いめに */
+        overflow-y: auto; /* 縦方向のスクロールを許可 */
+        position: relative; /* 背景オーバーレイの基準点 */
+      }
+      /* 背景画像オーバーレイのスタイル */
+      #background-image-overlay {
+        position: fixed; /* 常にビューポートに固定 */
+        inset: 0;
+        background-size: cover; /* デフォルトはカバー */
+        background-position: center; /* デフォルトは中央 */
+        background-repeat: no-repeat;
+        transition: opacity 0.3s ease; /* 不透明度の変化をスムーズに */
+        z-index: -10; /* 他の要素の下に配置 */
+      }
+      /* タイマーコンテナのスタイル */
+      .timer-container {
+        background-color: rgba(
+          240,
+          240,
+          240,
+          0.7
+        ); /* カードの背景色を半透明の薄いグレーに */
+        border: 1px solid #d0d0d0; /* カクカクした境界線 */
+        border-radius: 0; /* 角を直角に */
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05),
+          0 2px 4px -1px rgba(0, 0, 0, 0.03); /* 影を薄く */
+        padding: 2.5rem; /* パディング */
+        width: 95%; /* 幅を広めに設定 */
+        max-width: 1200px; /* 横画面での最大幅を拡大 */
+        text-align: center;
+        display: flex;
+        flex-direction: column; /* デフォルトは縦並び */
+        gap: 1.5rem; /* 要素間のスペース */
+        position: relative; /* 設定ボタンの配置基準 */
+        z-index: 1; /* 背景より手前に配置 */
+      }
+      /* 設定トグルボタンのスタイル */
+      #settings-toggle {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background-color: transparent;
+        border: 1px solid #d0d0d0;
+        color: #5a5a5a;
+        padding: 0.25rem 0.75rem;
+        border-radius: 0;
+        cursor: pointer;
+        font-size: 1.5rem;
+        line-height: 1;
+        transition: background-color 0.2s;
+      }
+      #settings-toggle:hover {
+        background-color: #e0e0e0;
+      }
+      /* 背景コントロールのスタイル */
+      .background-controls {
+        border: 1px solid #d0d0d0; /* 境界線 */
+        border-radius: 0; /* 角を直角に */
+        padding: 1rem;
+        display: none; /* 初期状態では非表示 */
+        flex-direction: column;
+        gap: 1rem;
+        background-color: rgba(
+          255,
+          255,
+          255,
+          0.8
+        ); /* 設定パネルの背景も半透明に */
+      }
+      .background-controls.visible {
+        display: flex; /* 表示状態 */
+      }
+      .background-controls label,
+      .background-controls span {
+        color: #5a5a5a; /* パステルグレーテキスト */
+      }
+      /* レンジスライダーのカスタムスタイル */
+      input[type="range"] {
+        -webkit-appearance: none; /* デフォルトのスタイルを無効化 */
+        appearance: none;
+        width: 100%;
+        height: 8px; /* トラックの高さ */
+        background: #e0e0e0; /* トラックの背景色 */
+        outline: none;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+        border-radius: 0; /* カクカク */
+        border: 1px solid #d0d0d0; /* 境界線 */
+      }
+
+      input[type="range"]:hover {
+        opacity: 1;
+      }
+
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px; /* サムの幅 */
+        height: 20px; /* サムの高さ */
+        background: #ffdab9; /* パステルオレンジ */
+        cursor: pointer;
+        border-radius: 0; /* カクカク */
+        border: 1px solid #ffc080; /* 濃いめのパステルオレンジのボーダー */
+        margin-top: -7px; /* トラックの中央に配置 */
+      }
+
+      input[type="range"]::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        background: #ffdab9;
+        cursor: pointer;
+        border-radius: 0;
+        border: 1px solid #ffc080;
+      }
+
+      /* 個々の文字列を囲む細い罫線 */
+      .bordered-text {
+        border: 1px solid #e0e0e0; /* 薄いグレーの罫線 */
+        padding: 0.5rem 1rem; /* 内側の余白 */
+        border-radius: 0; /* 角を直角に */
+        background-color: rgba(255, 255, 255, 0.5); /* 文字列背景も半透明に */
+        display: inline-block; /* 幅を内容に合わせる */
+      }
+
+      /* 合計経過時間表示のスタイル */
+      #total-elapsed-time {
+        font-size: 1.25rem; /* 小さめの文字サイズ */
+        font-weight: 600;
+        color: #707070; /* 落ち着いたグレー */
+        margin-bottom: 1rem; /* 下に余白 */
+        font-family: "monospace"; /* デジタル感のあるフォント */
+      }
+      /* タイマー表示部分のスタイル */
+      .timer-display {
+        font-size: 5rem; /* 大きなタイマー表示 */
+        font-weight: 700;
+        transition: color 0.3s ease-in-out; /* 色の変化をスムーズに */
+        letter-spacing: 0.1em; /* 文字間隔を広げる */
+        /* タイマー数字の背景は透明にするため、background-colorは設定しない */
+        /* bordered-textクラスは適用しない */
+      }
+      /* プログレスバーのコンテナ */
+      .progress-bar-container {
+        width: 100%;
+        background-color: transparent; /* 背景色を透明に */
+        border-radius: 0; /* 角を直角に */
+        height: 1.25rem; /* 高さ */
+        overflow: hidden; /* はみ出た部分を隠す */
+        border: 1px solid #d0d0d0; /* 境界線 */
+        position: relative; /* パーセンテージテキストを配置するため */
+      }
+      /* プログレスバー本体 - 色はJSで動的に設定 */
+      .progress-bar {
+        height: 100%;
+        width: 0%;
+        border-radius: 0; /* 角を直角に */
+        transition: width 0.5s linear, background-color 0.3s ease;
+        position: absolute; /* コンテナ内で絶対配置 */
+        top: 0;
+        left: 0;
+        z-index: 10; /* 最前面に表示 */
+      }
+      /* プログレスバー内のパーセンテージテキスト */
+      #progress-percentage-text {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem; /* 小さめの文字サイズ */
+        color: #333; /* 濃いめの色で視認性を確保 */
+        font-weight: bold;
+        opacity: 0.7;
+        z-index: 11; /* バーより前面に */
+      }
+
+      /* ボタンの共通スタイル */
+      .button {
+        padding: 0.75rem 1.5rem;
+        border-radius: 0; /* 角を直角に */
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s, transform 0.1s; /* ホバーとクリック時のアニメーション */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.5rem; /* アイコンとテキストの間のスペース */
+        border: 1px solid #ffc080; /* パステルオレンジのボーダー */
+        font-size: 1.125rem; /* ボタンの文字サイズを大きく */
+        background-color: #ffdab9; /* 全てのボタンをパステルオレンジに */
+        color: #5a5a5a; /* ボタンの文字色をパステルグレーに */
+      }
+      /* ボタンクリック時のアニメーション */
+      .button:active {
+        transform: scale(0.98);
+      }
+      .button:hover {
+        background-color: #ffc080; /* ホバー時の色を少し濃いパステルオレンジに */
+      }
+
+      /* 25分時のタイマー表示色 */
+      .text-work-time {
+        color: #ffdab9; /* パステルオレンジ */
+      }
+      /* 5分時のタイマー表示色 */
+      .text-break-time {
+        color: #b2ebf2; /* パステルシアン */
+      }
+
+      /* 横画面でのレイアウト調整 */
+      @media (min-width: 640px) {
+        /* smブレークポイント以上 */
+        .timer-container {
+          flex-direction: column; /* メインコンテナは縦並びを維持 */
+        }
+        .main-content-area {
+          flex-direction: row; /* タイマーとボタンのセクションを横並びに */
+          align-items: flex-start; /* 上揃え */
+        }
+        .timer-display-section {
+          flex: 1; /* 左側が広がるように */
+          align-items: flex-start; /* 左寄せ */
+        }
+        .button-section {
+          flex-direction: column; /* ボタンを縦並びに */
+          justify-content: flex-start; /* 上揃え */
+          margin-top: 0; /* モバイルでのマージンをリセット */
+          margin-left: 2rem; /* 左側に余白 */
+        }
+      }
+
+      /* キャラクター表示エリア */
+      #character-display {
+        position: fixed;
+        bottom: 0;
+        right: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        opacity: 0; /* 初期状態は非表示 */
+        transition: opacity 0.5s ease-in-out;
+        z-index: 20; /* タイマーより手前に配置 */
+        pointer-events: auto; /* ドラッグできるようにポインターイベントを有効化 */
+        cursor: grab; /* ドラッグ可能なカーソル */
+      }
+      #character-display.dragging {
+        cursor: grabbing; /* ドラッグ中のカーソル */
+      }
+
+      #character-image-wrapper {
+        max-width: 200px; /* キャラクター画像の最大幅 */
+        height: auto; /* 高さは自動調整 */
+        display: block;
+        margin-bottom: 10px; /* 吹き出しとの間隔 */
+        position: relative; /* 画像のトリミング用 */
+        background-repeat: no-repeat;
+        background-position: var(--char-bg-pos-x, center)
+          var(--char-bg-pos-y, center);
+        background-size: var(--char-bg-size, contain);
+      }
+
+      #character-image-wrapper.rounded {
+        border-radius: 50%; /* 真円トリミング */
+        overflow: hidden; /* はみ出た部分を隠す */
+        width: var(--char-size, 200px); /* char-sizeで幅と高さを固定 */
+        height: var(--char-size, 200px);
+      }
+
+      .speech-bubble {
+        background-color: rgba(255, 255, 255, 0.8);
+        border: 1px solid #d0d0d0;
+        border-radius: 0; /* カクカク */
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        color: #5a5a5a;
+        position: relative;
+        margin-right: 10px; /* 画像からのオフセット */
+        margin-bottom: 10px; /* 下からのオフセット */
+        max-width: 250px;
+        text-align: left;
+        word-wrap: break-word;
+      }
+
+      .speech-bubble::after {
+        content: "";
+        position: absolute;
+        bottom: -10px; /* 吹き出しのしっぽの位置 */
+        right: 20px; /* 吹き出しのしっぽの位置 */
+        width: 0;
+        height: 0;
+        border-left: 10px solid transparent;
+        border-right: 10px solid transparent;
+        border-top: 10px solid rgba(255, 255, 255, 0.8);
+      }
+
+      /* フォント選択のスタイル */
+      .font-select-container {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .font-select {
+        background-color: white;
+        border: 1px solid #d0d0d0;
+        color: #5a5a5a;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0;
+        font-size: 0.875rem;
+      }
+
+      /* トリミングモーダルのスタイル */
+      #trimming-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: none; /* 初期状態は非表示 */
+        place-items: center;
+        z-index: 100;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      #trimming-preview-container {
+        width: 80vw;
+        height: 80vw;
+        max-width: 500px;
+        max-height: 500px;
+        border-radius: 50%; /* 真円のトリミング枠 */
+        overflow: hidden;
+        position: relative;
+        background-color: #fff;
+        border: 2px solid #ffdab9; /* トリミング枠の強調 */
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); /* 周囲を暗くする */
+      }
+
+      #trimming-image-preview {
+        width: 100%; /* 初期はコンテナに合わせる */
+        height: 100%; /* 初期はコンテナに合わせる */
+        background-repeat: no-repeat;
+        background-position: center center; /* 初期位置 */
+        background-size: contain; /* 初期サイズ */
+        cursor: grab;
+        user-select: none;
+        -webkit-user-drag: none;
+        touch-action: none; /* タッチイベントのデフォルト動作を無効化 */
+      }
+
+      /* トリミングモード中のトップパネル */
+      #trimming-top-panel {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        display: flex;
+        flex-direction: row; /* 横並び */
+        align-items: center;
+        gap: 1rem;
+        z-index: 101;
+        background-color: rgba(255, 255, 255, 0.8); /* 背景を付けて読みやすく */
+        padding: 0.75rem;
+        border-radius: 0;
+        border: 1px solid #d0d0d0;
+        flex-wrap: wrap; /* 折り返し */
+        justify-content: flex-end; /* 右寄せ */
+      }
+
+      #trimming-mode-char-preview {
+        width: 80px; /* 小さいサイズ */
+        height: 80px;
+        border-radius: 50%;
+        overflow: hidden;
+        background-repeat: no-repeat;
+        background-position: var(--char-bg-pos-x, center)
+          var(--char-bg-pos-y, center); /* メインキャラから設定を継承 */
+        background-size: var(
+          --char-bg-size,
+          contain
+        ); /* メインキャラから設定を継承 */
+        border: 1px solid #ffdab9; /* 枠線 */
+        flex-shrink: 0; /* 縮まないように */
+      }
+
+      .trimming-controls {
+        display: flex;
+        flex-direction: column; /* 縦積み */
+        gap: 0.5rem;
+      }
+      .trimming-controls label,
+      .trimming-controls span {
+        color: #5a5a5a;
+      }
+      .trimming-controls input[type="range"] {
+        width: 100px;
+      }
+      #confirm-trim-button {
+        padding: 0.75rem 2rem;
+        background-color: #4caf50; /* 確定ボタンの色 */
+        color: white;
+        border: none;
+        border-radius: 0;
+        cursor: pointer;
+        font-size: 1.125rem;
+        transition: background-color 0.2s;
+        z-index: 101; /* モーダルコンテンツより手前 */
+        flex-shrink: 0; /* 縮まないように */
+      }
+      #confirm-trim-button:hover {
+        background-color: #45a049;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 背景画像オーバーレイ -->
+    <div id="background-image-overlay"></div>
+
+    <div class="timer-container">
+      <!-- 設定トグルボタン -->
+      <button id="settings-toggle">∴</button>
+
+      <!-- 背景コントロール (初期状態では非表示) -->
+      <div id="background-controls" class="background-controls">
+        <div class="flex items-center gap-2">
+          <label
+            for="image-upload"
+            class="text-pastel-gray-text text-sm cursor-pointer border border-pastel-gray-text px-2 py-1"
+            >背景画像選択</label
+          >
+          <input
+            type="file"
+            id="image-upload"
+            accept="image/*"
+            class="hidden"
+          />
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-pastel-gray-text text-sm">不透明度:</span>
+          <input
+            type="range"
+            id="opacity-slider"
+            min="0"
+            max="1"
+            step="0.01"
+            value="1"
+            class="w-24"
+          />
+        </div>
+        <div class="flex flex-col sm:flex-row items-center gap-2">
+          <span class="text-pastel-gray-text text-sm">サイズ:</span>
+          <div class="flex gap-2">
+            <label class="flex items-center gap-1 text-sm">
+              <input type="radio" name="bg-size" value="cover" checked /> カバー
+            </label>
+            <label class="flex items-center gap-1 text-sm">
+              <input type="radio" name="bg-size" value="contain" /> コンテイン
+            </label>
+            <label class="flex items-center gap-1 text-sm">
+              <input type="radio" name="bg-size" value="auto" /> 自動
+            </label>
+          </div>
+        </div>
+        <div class="flex flex-col sm:flex-row items-center gap-2">
+          <span class="text-pastel-gray-text text-sm">位置X:</span>
+          <input
+            type="text"
+            id="bg-position-x"
+            value="center"
+            class="w-24 p-1 border border-pastel-gray-text bg-white text-pastel-gray-text text-sm"
+          />
+          <span class="text-pastel-gray-text text-sm">位置Y:</span>
+          <input
+            type="text"
+            id="bg-position-y"
+            value="center"
+            class="w-24 p-1 border border-pastel-gray-text bg-white text-pastel-gray-text text-sm"
+          />
+        </div>
+        <div class="flex items-center gap-2">
+          <label
+            for="character-image-upload"
+            class="text-pastel-gray-text text-sm cursor-pointer border border-pastel-gray-text px-2 py-1"
+            >キャラ画像変更</label
+          >
+          <input
+            type="file"
+            id="character-image-upload"
+            accept="image/*"
+            class="hidden"
+          />
+        </div>
+        <div class="flex flex-col sm:flex-row items-center gap-2">
+          <span class="text-pastel-gray-text text-sm">キャラ表示:</span>
+          <div class="flex gap-2">
+            <label class="flex items-center gap-1 text-sm">
+              <input
+                type="radio"
+                name="char-display-mode"
+                value="normal"
+                checked
+              />
+              ノーマル
+            </label>
+            <label class="flex items-center gap-1 text-sm">
+              <input type="radio" name="char-display-mode" value="rounded" />
+              丸トリミング
+            </label>
+          </div>
+        </div>
+        <button id="reset-trim-button" class="button w-auto px-4 py-2 text-sm">
+          トリミング再設定
+        </button>
+        <div class="flex flex-col sm:flex-row items-center gap-2">
+          <span class="text-pastel-gray-text text-sm">キャラ位置X:</span>
+          <input
+            type="range"
+            id="char-position-x"
+            min="0"
+            max="100"
+            step="1"
+            value="100"
+            class="w-24"
+          />
+          <span class="text-pastel-gray-text text-sm">キャラ位置Y:</span>
+          <input
+            type="range"
+            id="char-position-y"
+            min="0"
+            max="100"
+            step="1"
+            value="0"
+            class="w-24"
+          />
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-pastel-gray-text text-sm">キャラサイズ:</span>
+          <input
+            type="range"
+            id="char-size"
+            min="50"
+            max="300"
+            step="1"
+            value="200"
+            class="w-24"
+          />
+        </div>
+        <div class="font-select-container">
+          <span class="text-pastel-gray-text text-sm">タイマーフォント:</span>
+          <select id="timer-font-select" class="font-select">
+            <option
+              value="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'"
+            >
+              デバイスデフォルト
+            </option>
+            <option value="Inter, sans-serif" selected>Inter</option>
+            <option value="'Press Start 2P', cursive">Press Start 2P</option>
+            <option value="'Roboto Mono', monospace">Roboto Mono</option>
+            <option value="'Orbitron', sans-serif">Orbitron</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-pastel-gray-text text-sm">タイマー枠不透明度:</span>
+          <input
+            type="range"
+            id="timer-frame-opacity-slider"
+            min="0"
+            max="1"
+            step="0.01"
+            value="0.7"
+            class="w-24"
+          />
+        </div>
+        <!-- プログレスバーテスト用スライダー -->
+        <div class="flex items-center gap-2">
+          <span class="text-pastel-gray-text text-sm"
+            >プログレスバーテスト:</span
+          >
+          <input
+            type="range"
+            id="progress-bar-test-slider"
+            min="0"
+            max="100"
+            step="1"
+            value="0"
+            class="w-24"
+          />
+        </div>
+        <button
+          id="test-character-button"
+          class="button w-auto px-4 py-2 text-sm"
+        >
+          △労いテスト
+        </button>
+        <button
+          id="reset-char-settings-button"
+          class="button w-auto px-4 py-2 text-sm"
+        >
+          キャラ設定リセット
+        </button>
+      </div>
+
+      <!-- 合計経過時間 -->
+      <div
+        id="total-elapsed-time"
+        class="bordered-text text-pastel-gray-text text-lg font-semibold mb-4"
+      >
+        TOTAL: 00:00:00
+      </div>
+
+      <!-- メインタイマーとボタンセクション -->
+      <div
+        class="main-content-area flex flex-col sm:flex-row justify-between items-center w-full gap-8"
+      >
+        <!-- 左側: タイマー表示、ステータス、セット数、プログレスバー -->
+        <div
+          class="timer-display-section flex-1 flex flex-col items-center sm:items-start"
+        >
+          <div
+            id="timer-status"
+            class="bordered-text text-2xl font-semibold text-pastel-gray-text mb-2"
+          >
+            WORK TIME
+          </div>
+          <div id="timer-display" class="timer-display text-work-time">
+            25:00
+          </div>
+          <!-- bordered-textを削除 -->
+          <div
+            id="completed-sets"
+            class="bordered-text text-xl font-medium text-pastel-gray-text mt-2"
+          >
+            SETS COMPLETED: 0
+          </div>
+          <!-- プログレスバー -->
+          <div class="progress-bar-container w-full mt-4">
+            <div id="progress-bar" class="progress-bar"></div>
+            <span id="progress-percentage-text">0%</span>
+          </div>
+        </div>
+
+        <!-- 右側: ボタン -->
+        <div
+          class="button-section flex flex-row sm:flex-col justify-center items-center gap-4 mt-6 sm:mt-0"
+        >
+          <button id="start-button" class="button w-32">
+            <span>Str</span>
+          </button>
+          <button id="pause-button" class="button w-32">
+            <span>Stp</span>
+          </button>
+          <button id="reset-button" class="button w-32">
+            <span>Rs</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- キャラクター表示エリア -->
+    <div id="character-display">
+      <div id="speech-bubble" class="speech-bubble" style="display: none"></div>
+      <div id="character-image-wrapper">
+        <!-- キャラクター画像はCSSのbackground-imageで設定 -->
+      </div>
+    </div>
+
+    <!-- トリミングモーダル -->
+    <div id="trimming-modal">
+      <div id="trimming-top-panel">
+        <!-- New wrapper for top-right elements -->
+        <div id="trimming-mode-char-preview"></div>
+        <div class="trimming-controls">
+          <span class="text-pastel-gray-text text-sm">ズーム:</span>
+          <input
+            type="range"
+            id="trim-zoom-slider"
+            min="100"
+            max="500"
+            step="1"
+            value="100"
+            class="w-24"
+          />
+          <span class="text-pastel-gray-text text-sm">位置X:</span>
+          <input
+            type="range"
+            id="trim-pos-x-slider"
+            min="0"
+            max="100"
+            step="1"
+            value="50"
+            class="w-24"
+          />
+          <span class="text-pastel-gray-text text-sm">位置Y:</span>
+          <input
+            type="range"
+            id="trim-pos-y-slider"
+            min="0"
+            max="100"
+            step="1"
+            value="50"
+            class="w-24"
+          />
+        </div>
+        <button id="confirm-trim-button">確定</button>
+      </div>
+
+      <div id="trimming-preview-container">
+        <div id="trimming-image-preview"></div>
+        <!-- background-imageで表示 -->
+      </div>
+    </div>
+
+    <script>
+      // 定数と変数
+      const WORK_TIME = 25 * 60; // 作業時間（25分を秒に変換）
+      const BREAK_TIME = 5 * 60; // 休憩時間（5分を秒に変換）
+
+      let currentTime = WORK_TIME; // 現在の残り時間
+      let isWorking = true; // 現在が作業時間か休憩時間かを示すフラグ (true: 作業時間, false: 休憩時間)
+      let intervalId = null; // setIntervalのIDを保持する変数
+      let completedSets = 0; // 完了した25分セットの数
+      let totalElapsedTime = 0; // 合計経過時間（秒）
+      // キャラクター画像のURLを保持。デフォルトのプレースホルダー画像を設定。
+      let characterImageSrc =
+        "https://placehold.co/200x200/FFDAB9/5A5A5A?text=Char";
+
+      // DOM要素の取得
+      const timerDisplay = document.getElementById("timer-display");
+      const timerStatus = document.getElementById("timer-status");
+      const progressBar = document.getElementById("progress-bar");
+      const progressPercentageText = document.getElementById(
+        "progress-percentage-text"
+      ); // プログレスバー内のテキスト
+      const completedSetsDisplay = document.getElementById("completed-sets");
+      const startButton = document.getElementById("start-button");
+      const pauseButton = document.getElementById("pause-button");
+      const resetButton = document.getElementById("reset-button");
+      const totalElapsedTimeDisplay =
+        document.getElementById("total-elapsed-time"); // 合計経過時間表示要素
+      const imageUploadInput = document.getElementById("image-upload"); // 背景画像アップロード入力
+      const opacitySlider = document.getElementById("opacity-slider"); // 背景不透明度スライダー
+      const backgroundImageOverlay = document.getElementById(
+        "background-image-overlay"
+      ); // 背景画像オーバーレイ
+      const settingsToggle = document.getElementById("settings-toggle"); // 設定トグルボタン
+      const backgroundControls = document.getElementById("background-controls"); // 背景コントロールパネル
+      const bgSizeRadios = document.querySelectorAll('input[name="bg-size"]'); // 背景サイズラジオボタン
+      const bgPositionXInput = document.getElementById("bg-position-x"); // 背景位置X入力
+      const bgPositionYInput = document.getElementById("bg-position-y"); // 背景位置Y入力
+      const characterDisplay = document.getElementById("character-display"); // キャラクター表示エリア
+      const characterImageWrapper = document.getElementById(
+        "character-image-wrapper"
+      ); // キャラクター画像ラッパー (divに変更)
+      const speechBubble = document.getElementById("speech-bubble"); // 吹き出し
+
+      const characterImageUploadInput = document.getElementById(
+        "character-image-upload"
+      ); // キャラクター画像アップロード
+      const charDisplayModeRadios = document.querySelectorAll(
+        'input[name="char-display-mode"]'
+      ); // キャラクター表示モードラジオボタン
+      const resetTrimButton = document.getElementById("reset-trim-button"); // トリミング再設定ボタン
+      const charPositionXSlider = document.getElementById("char-position-x"); // キャラクター位置Xスライダー
+      const charPositionYSlider = document.getElementById("char-position-y"); // キャラクター位置Yスライダー
+      const charSizeSlider = document.getElementById("char-size"); // キャラクターサイズスライダー
+      const timerFontSelect = document.getElementById("timer-font-select"); // タイマーフォント選択
+      const timerFrameOpacitySlider = document.getElementById(
+        "timer-frame-opacity-slider"
+      ); // タイマー枠不透明度スライダー
+      const timerContainer = document.querySelector(".timer-container"); // タイマーコンテナ
+      const testCharacterButton = document.getElementById(
+        "test-character-button"
+      ); // 労いテストボタン
+      const resetCharSettingsButton = document.getElementById(
+        "reset-char-settings-button"
+      ); // キャラ設定リセットボタン
+      const progressBarTestSlider = document.getElementById(
+        "progress-bar-test-slider"
+      ); // プログレスバーテスト用スライダー
+
+      // トリミングモーダル関連
+      const trimmingModal = document.getElementById("trimming-modal");
+      const trimmingTopPanel = document.getElementById("trimming-top-panel");
+      const trimmingModeCharPreview = document.getElementById(
+        "trimming-mode-char-preview"
+      );
+      const trimmingPreviewContainer = document.getElementById(
+        "trimming-preview-container"
+      );
+      const trimmingImagePreview = document.getElementById(
+        "trimming-image-preview"
+      ); // div
+      const trimZoomSlider = document.getElementById("trim-zoom-slider");
+      const trimPosXSlider = document.getElementById("trim-pos-x-slider");
+      const trimPosYSlider = document.getElementById("trim-pos-y-slider");
+      const confirmTrimButton = document.getElementById("confirm-trim-button");
+
+      // トリミング位置とズームの現在の状態を保持する変数 (background-sizeとbackground-position)
+      let currentTrimBackgroundSize = "contain";
+      let currentTrimBackgroundPositionX = "center";
+      let currentTrimBackgroundPositionY = "center";
+
+      // ダウナーな女子高生らしい労いの言葉 (合計20パターン)
+      const encouragingWords = [
+        "ふぅん、頑張ってるじゃん。…別に、褒めてるわけじゃないけど。",
+        "ま、休憩くらいはしてあげてもいいんじゃない？",
+        "疲れてるなら、無理しなくていいよ。…たぶん。",
+        "別に、キミが頑張ろうが頑張らなかろうが、ボクには関係ないし。",
+        "…ん、休憩？ あぁ、いいんじゃない？",
+        "別に、期待とかしてないから、適当に頑張れば？",
+        "…ふぅ、やっと休憩。キミも休めば？",
+        "別に、キミが休むのは自由だし。ボクは見てるだけ。",
+        "…ねぇ、ちゃんと休んでる？ 無理はよくないよ。",
+        "あー、もう、疲れたなら休みなよ。ボクも疲れるから。",
+        "ま、たまにはサボってもバチは当たらないんじゃない？ 知らんけど。",
+        "…ん、休憩？ あー、別にいいよ。好きにすれば。",
+        "どうせすぐまた勉強するんでしょ？ なら、ちょっとくらい休んでもいいんじゃない？",
+        "別に、キミが休んだところで、ボクの生活には何の影響もないし。",
+        "…ふぅ、ボクもちょっと休憩したいんだけど。キミが休むなら、付き合ってあげてもいいよ。",
+        "頑張ってるのは認めるけど、無理はしないでよね。後で面倒見るの、ボクだし。",
+        "…ねぇ、ちゃんと水分補給してる？ そういうの、大事だよ。",
+        "あーあ、まだやるの？ もうちょっと休めばいいのに。",
+        "別に、ボクはキミの監視役じゃないから、好きにすればいいよ。…でも、ちゃんと休んでね。",
+        "…ふん、お疲れ様。別に、感動とかしてないから。",
+      ];
+
+      // 効果音の生成 (Web Audio APIを使用)
+      const audioContext = new (window.AudioContext ||
+        window.webkitAudioContext)();
+      function playBeep() {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(
+          0.001,
+          audioContext.currentTime + 0.5
+        );
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.5);
+      }
+
+      /**
+       * 時間をHH:MM:SS形式にフォーマットする関数
+       * @param {number} totalSeconds - 合計秒数
+       * @returns {string} フォーマットされた時間文字列
+       */
+      function formatTime(totalSeconds) {
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        return `${hours.toString().padStart(2, "0")}:${minutes
+          .toString()
+          .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+      }
+
+      /**
+       * タイマーの表示（分:秒）とステータス、完了セット数を更新する関数
+       */
+      function updateDisplay() {
+        const minutes = Math.floor(currentTime / 60);
+        const seconds = currentTime % 60;
+        timerDisplay.textContent = `${minutes
+          .toString()
+          .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+        timerStatus.textContent = isWorking ? "WORK TIME" : "BREAK TIME";
+        completedSetsDisplay.textContent = `SETS COMPLETED: ${completedSets}`;
+
+        if (isWorking) {
+          timerDisplay.classList.add("text-work-time");
+          timerDisplay.classList.remove("text-break-time");
+        } else {
+          timerDisplay.classList.add("text-break-time");
+          timerDisplay.classList.remove("text-work-time");
+        }
+      }
+
+      /**
+       * プログレスバーの幅と色を更新する関数
+       */
+      function updateProgressBar() {
+        const totalTime = isWorking ? WORK_TIME : BREAK_TIME;
+        // 経過時間の割合を計算 (残り時間ではなく経過時間で計算)
+        // currentTimeはカウントダウンしていくので、totalTimeから引くことで経過時間を算出
+        const elapsedTime = totalTime - currentTime;
+        let percentage = (elapsedTime / totalTime) * 100;
+
+        // NaNやInfinityを避けるためのクランプ
+        if (isNaN(percentage) || !isFinite(percentage)) {
+          percentage = 0;
+        }
+        percentage = Math.max(0, Math.min(100, percentage));
+
+        // DOM要素が取得できているか確認
+        if (!progressBar) {
+          console.error("Error: 'progress-bar' element not found!");
+          return;
+        }
+        if (!progressPercentageText) {
+          console.error("Error: 'progress-percentage-text' element not found!");
+          return;
+        }
+
+        progressBar.style.width = `${percentage}%`;
+        progressPercentageText.textContent = `${Math.round(percentage)}%`;
+
+        // 直接カラーコードを設定
+        if (isWorking) {
+          progressBar.style.backgroundColor = "#FFDAB9"; // pastel-orange
+        } else {
+          progressBar.style.backgroundColor = "#B2EBF2"; // pastel-cyan
+        }
+
+        // デバッグ用: コンソールにプログレスバーの情報を出力
+        console.log(
+          `[ProgressBar Update] isWorking: ${isWorking}, currentTime: ${currentTime}, totalTime: ${totalTime}, elapsedTime: ${elapsedTime}, calculated percentage: ${percentage.toFixed(
+            2
+          )}%`
+        );
+        console.log(
+          `[ProgressBar Update] Setting width to: ${progressBar.style.width}, Setting background-color to: ${progressBar.style.backgroundColor}`
+        );
+        console.log(
+          `[ProgressBar Update] Computed width: ${
+            getComputedStyle(progressBar).width
+          }, Computed background-color: ${
+            getComputedStyle(progressBar).backgroundColor
+          }`
+        );
+      }
+
+      /**
+       * 合計経過時間表示を更新する関数
+       */
+      function updateTotalElapsedTimeDisplay() {
+        totalElapsedTimeDisplay.textContent = `TOTAL: ${formatTime(
+          totalElapsedTime
+        )}`;
+      }
+
+      /**
+       * キャラクターをフェードインさせ、労いの言葉を表示する関数
+       */
+      function showCharacterWithWords() {
+        characterDisplay.style.opacity = 1;
+
+        const randomIndex = Math.floor(Math.random() * encouragingWords.length);
+        speechBubble.textContent = encouragingWords[randomIndex];
+        speechBubble.style.display = "block";
+
+        setTimeout(() => {
+          characterDisplay.style.opacity = 0;
+          speechBubble.style.display = "none";
+        }, 5000);
+      }
+
+      /**
+       * タイマーを開始する関数
+       */
+      function startTimer() {
+        if (intervalId !== null) return;
+
+        intervalId = setInterval(() => {
+          currentTime--;
+          totalElapsedTime++;
+          updateDisplay();
+          updateProgressBar();
+          updateTotalElapsedTimeDisplay();
+
+          if (currentTime <= 0) {
+            playBeep();
+            clearInterval(intervalId);
+            intervalId = null;
+
+            if (isWorking) {
+              completedSets++;
+              currentTime = BREAK_TIME;
+              timerStatus.classList.remove("text-pastel-gray-text");
+              timerStatus.classList.add("text-pastel-cyan");
+              showCharacterWithWords();
+            } else {
+              currentTime = WORK_TIME;
+              timerStatus.classList.remove("text-pastel-cyan");
+              timerStatus.classList.add("text-pastel-gray-text");
+            }
+            isWorking = !isWorking;
+            updateDisplay();
+            // タイマー切り替え時にプログレスバーをリセット（0%から再開）
+            updateProgressBar();
+            // デバッグ用: フェーズ切り替わりのログ
+            console.log(
+              `--- Phase Transition --- New isWorking: ${isWorking}, New currentTime: ${currentTime}`
+            );
+            startTimer();
+          }
+        }, 1000);
+      }
+
+      /**
+       * タイマーを一時停止する関数
+       */
+      function pauseTimer() {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+
+      /**
+       * タイマーをリセットする関数
+       */
+      function resetTimer() {
+        pauseTimer();
+        currentTime = WORK_TIME;
+        isWorking = true;
+        completedSets = 0;
+        totalElapsedTime = 0;
+        timerStatus.classList.remove("text-pastel-cyan");
+        timerStatus.classList.add("text-pastel-gray-text");
+        updateDisplay();
+        updateProgressBar();
+        updateTotalElapsedTimeDisplay();
+      }
+
+      // イベントリスナーの設定
+      startButton.addEventListener("click", startTimer);
+      pauseButton.addEventListener("click", pauseTimer);
+      resetButton.addEventListener("click", resetTimer);
+
+      imageUploadInput.addEventListener("change", (event) => {
+        const file = event.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            backgroundImageOverlay.style.backgroundImage = `url('${e.target.result}')`;
+          };
+          reader.readAsDataURL(file);
+        } else {
+          backgroundImageOverlay.style.backgroundImage = "none";
+        }
+      });
+
+      opacitySlider.addEventListener("input", (event) => {
+        backgroundImageOverlay.style.opacity = event.target.value;
+      });
+
+      bgSizeRadios.forEach((radio) => {
+        radio.addEventListener("change", (event) => {
+          backgroundImageOverlay.style.backgroundSize = event.target.value;
+        });
+      });
+
+      bgPositionXInput.addEventListener("input", (event) => {
+        backgroundImageOverlay.style.backgroundPositionX = event.target.value;
+      });
+
+      bgPositionYInput.addEventListener("input", (event) => {
+        backgroundImageOverlay.style.backgroundPositionY = event.target.value;
+      });
+
+      settingsToggle.addEventListener("click", () => {
+        backgroundControls.classList.toggle("visible");
+      });
+
+      characterImageUploadInput.addEventListener("change", (event) => {
+        const file = event.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            characterImageSrc = e.target.result;
+            // メイン表示とトリミングプレビューの両方に適用
+            characterImageWrapper.style.backgroundImage = `url('${characterImageSrc}')`;
+            trimmingImagePreview.style.backgroundImage = `url('${characterImageSrc}')`;
+            trimmingModeCharPreview.style.backgroundImage = `url('${characterImageSrc}')`;
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+      charDisplayModeRadios.forEach((radio) => {
+        radio.addEventListener("change", (event) => {
+          if (event.target.value === "rounded") {
+            characterImageWrapper.classList.add("rounded");
+            enterTrimmingMode(); // 丸トリミング選択時、自動でトリミングモードへ
+          } else {
+            characterImageWrapper.classList.remove("rounded");
+            // ノーマルモードに戻す際の背景設定をリセット
+            characterImageWrapper.style.backgroundSize = "contain";
+            characterImageWrapper.style.backgroundPosition = "center center";
+          }
+        });
+      });
+
+      resetTrimButton.addEventListener("click", enterTrimmingMode);
+
+      charPositionXSlider.addEventListener("input", (event) => {
+        characterDisplay.style.right = `${100 - event.target.value}%`;
+      });
+
+      charPositionYSlider.addEventListener("input", (event) => {
+        characterDisplay.style.bottom = `${event.target.value}%`;
+      });
+
+      charSizeSlider.addEventListener("input", (event) => {
+        const size = event.target.value;
+        characterImageWrapper.style.width = `${size}px`;
+        characterImageWrapper.style.height = `${size}px`;
+      });
+
+      timerFontSelect.addEventListener("change", (event) => {
+        timerDisplay.style.fontFamily = event.target.value;
+        progressPercentageText.style.fontFamily = event.target.value; // %表示のフォントも更新
+      });
+
+      timerFrameOpacitySlider.addEventListener("input", (event) => {
+        timerContainer.style.backgroundColor = `rgba(240, 240, 240, ${event.target.value})`;
+      });
+      testCharacterButton.addEventListener("click", showCharacterWithWords);
+
+      resetCharSettingsButton.addEventListener("click", () => {
+        // キャラ位置をリセット
+        charPositionXSlider.value = 100;
+        charPositionYSlider.value = 0;
+        characterDisplay.style.right = "0%";
+        characterDisplay.style.bottom = "0%";
+
+        // キャラサイズをリセット
+        charSizeSlider.value = 200;
+        characterImageWrapper.style.width = "200px";
+        characterImageWrapper.style.height = "200px";
+
+        // キャラ表示モードをノーマルにリセット
+        document.querySelector(
+          'input[name="char-display-mode"][value="normal"]'
+        ).checked = true;
+        characterImageWrapper.classList.remove("rounded");
+        characterImageWrapper.style.backgroundSize = "contain";
+        characterImageWrapper.style.backgroundPosition = "center center";
+
+        // トリミング関連の内部状態もリセット
+        currentTrimBackgroundSize = "contain";
+        currentTrimBackgroundPositionX = "center";
+        currentTrimBackgroundPositionY = "center";
+        trimZoomSlider.value = 100;
+        trimPosXSlider.value = 50;
+        trimPosYSlider.value = 50;
+
+        // トリミングプレビューのスタイルもリセット
+        trimmingImagePreview.style.backgroundSize = "contain";
+        trimmingImagePreview.style.backgroundPosition = "center center";
+        trimmingModeCharPreview.style.backgroundSize = "contain";
+        trimmingModeCharPreview.style.backgroundPosition = "center center";
+      });
+
+      // プログレスバーテスト用スライダーのイベントリスナー
+      progressBarTestSlider.addEventListener("input", (event) => {
+        const percentage = parseFloat(event.target.value); // 数値に変換
+        progressBar.style.width = `${percentage}%`;
+        progressPercentageText.textContent = `${Math.round(percentage)}%`; // テキストも更新
+
+        // スライダーで操作した時に色も切り替わるようにする
+        if (percentage < 50) {
+          // 便宜的に50%以下を勉強中、それ以上を休憩中とする
+          progressBar.style.backgroundColor = "#FFDAB9"; // pastel-orange
+        } else {
+          progressBar.style.backgroundColor = "#B2EBF2"; // pastel-cyan
+        }
+        console.log(
+          `[Test Slider] Setting width to: ${percentage}%, Computed width: ${
+            getComputedStyle(progressBar).width
+          }`
+        );
+      });
+
+      // トリミングモーダル内のドラッグ機能 (background-positionを操作)
+      let isTrimmingDragging = false;
+      let initialPointerX, initialPointerY;
+      let initialBgPosX, initialBgPosY; // background-positionの数値部分を保持
+
+      function getBgPositionValues(element) {
+        const style = getComputedStyle(element);
+        const bgPos = style.backgroundPosition.split(" ");
+        let x = bgPos[0];
+        let y = bgPos[1];
+        // px値に変換して返す
+        return {
+          x: parseFloat(x), // assuming px or % that can be parsed to float
+          y: parseFloat(y),
+        };
+      }
+
+      function handleTrimmingPointerDown(e) {
+        isTrimmingDragging = true;
+        trimmingImagePreview.style.cursor = "grabbing";
+        initialPointerX = e.clientX || e.touches[0].clientX;
+        initialPointerY = e.clientY || e.touches[0].clientY;
+
+        const currentPos = getBgPositionValues(trimmingImagePreview);
+        initialBgPosX = currentPos.x;
+        initialBgPosY = currentPos.y;
+
+        e.preventDefault();
+      }
+
+      function handleTrimmingPointerMove(e) {
+        if (!isTrimmingDragging) return;
+
+        const clientX = e.clientX || e.touches[0].clientX;
+        const clientY = e.clientY || e.touches[0].clientY;
+
+        const deltaX = clientX - initialPointerX;
+        const deltaY = clientY - initialPointerY;
+
+        const containerWidth = trimmingImagePreview.offsetWidth;
+        const containerHeight = trimmingImagePreview.offsetHeight;
+
+        // background-sizeの現在の値を読み取る（例: "200%"）
+        const currentBgSizeStr =
+          getComputedStyle(trimmingImagePreview).backgroundSize;
+        const currentBgSizeVal =
+          parseFloat(currentBgSizeStr.replace("%", "")) / 100; // 例: 2.0
+
+        // 移動量をパーセンテージに変換
+        // background-positionのパーセンテージは (コンテナサイズ - 背景画像サイズ) に相対的
+        // 画像が拡大されている場合、移動できる範囲が広がる
+        const imgDisplayWidth = containerWidth * currentBgSizeVal;
+        const imgDisplayHeight = containerHeight * currentBgSizeVal;
+
+        let newBgPosX =
+          initialBgPosX + (deltaX / (imgDisplayWidth - containerWidth)) * 100;
+        let newBgPosY =
+          initialBgPosY + (deltaY / (imgDisplayHeight - containerHeight)) * 100;
+
+        // 0%から100%の範囲にクランプしないことで、オーバー分を透過表示可能にする
+        // ただし、スライダーは0-100%なので、その範囲で表示
+        trimmingImagePreview.style.backgroundPosition = `${newBgPosX}% ${newBgPosY}%`;
+
+        // スライダーの値を更新（0-100%の範囲に丸める）
+        trimPosXSlider.value = Math.max(0, Math.min(100, newBgPosX));
+        trimPosYSlider.value = Math.max(0, Math.min(100, newBgPosY));
+      }
+
+      function handleTrimmingPointerUp() {
+        isTrimmingDragging = false;
+        trimmingImagePreview.style.cursor = "grab";
+        // 最終的な位置を保存
+        const finalPos =
+          getComputedStyle(trimmingImagePreview).backgroundPosition.split(" ");
+        currentTrimBackgroundPositionX = finalPos[0];
+        currentTrimBackgroundPositionY = finalPos[1];
+      }
+
+      trimmingImagePreview.addEventListener(
+        "mousedown",
+        handleTrimmingPointerDown
+      );
+      trimmingImagePreview.addEventListener(
+        "mousemove",
+        handleTrimmingPointerMove
+      );
+      document.addEventListener("mouseup", handleTrimmingPointerUp);
+
+      trimmingImagePreview.addEventListener(
+        "touchstart",
+        handleTrimmingPointerDown
+      );
+      trimmingImagePreview.addEventListener(
+        "touchmove",
+        handleTrimmingPointerMove
+      );
+      document.addEventListener("touchend", handleTrimmingPointerUp);
+
+      // トリミングズームスライダー
+      trimZoomSlider.addEventListener("input", (event) => {
+        const zoomValue = event.target.value;
+        trimmingImagePreview.style.backgroundSize = `${zoomValue}%`;
+        currentTrimBackgroundSize = `${zoomValue}%`;
+        // ズームが変わったら、位置スライダーの範囲も調整する必要があるが、
+        // 今回は0-100%で固定し、ドラッグでカバーする
+      });
+
+      // トリミング位置Xスライダー
+      trimPosXSlider.addEventListener("input", (event) => {
+        const posX = event.target.value;
+        trimmingImagePreview.style.backgroundPositionX = `${posX}%`;
+        currentTrimBackgroundPositionX = `${posX}%`;
+      });
+
+      // トリミング位置Yスライダー
+      trimPosYSlider.addEventListener("input", (event) => {
+        const posY = event.target.value;
+        trimmingImagePreview.style.backgroundPositionY = `${posY}%`;
+        currentTrimBackgroundPositionY = `${posY}%`;
+      });
+
+      // トリミング確定ボタン
+      confirmTrimButton.addEventListener("click", () => {
+        trimmingModal.style.display = "none"; // モーダルを非表示にする
+        characterDisplay.style.opacity = 1; // メインキャラクターを再表示
+
+        // メインのキャラクター画像にトリミング設定を適用
+        characterImageWrapper.classList.add("rounded"); // 丸トリミングクラスを追加
+        characterImageWrapper.style.backgroundImage = `url('${characterImageSrc}')`;
+        characterImageWrapper.style.backgroundSize = currentTrimBackgroundSize;
+        characterImageWrapper.style.backgroundPosition = `${currentTrimBackgroundPositionX} ${currentTrimBackgroundPositionY}`;
+
+        // トリミングモード中のキャラプレビューも更新
+        trimmingModeCharPreview.style.backgroundImage = `url('${characterImageSrc}')`;
+        trimmingModeCharPreview.style.backgroundSize =
+          currentTrimBackgroundSize;
+        trimmingModeCharPreview.style.backgroundPosition = `${currentTrimBackgroundPositionX} ${currentTrimBackgroundPositionY}`;
+      });
+
+      // トリミングモードに入る関数
+      function enterTrimmingMode() {
+        if (!characterImageSrc) {
+          console.warn("キャラクター画像が設定されていません。");
+          return;
+        }
+
+        trimmingModal.style.display = "grid"; // gridで中央揃え
+        characterDisplay.style.opacity = 0; // メインキャラクターを非表示
+
+        trimmingImagePreview.style.backgroundImage = `url('${characterImageSrc}')`;
+        // 以前の設定があれば適用、なければ初期値
+        trimmingImagePreview.style.backgroundSize = currentTrimBackgroundSize;
+        trimmingImagePreview.style.backgroundPosition = `${currentTrimBackgroundPositionX} ${currentTrimBackgroundPositionY}`;
+
+        // スライダーの値を更新
+        trimZoomSlider.value = parseFloat(
+          currentTrimBackgroundSize.replace("%", "")
+        );
+        trimPosXSlider.value = parseFloat(
+          currentTrimBackgroundPositionX.replace("%", "")
+        );
+        trimPosYSlider.value = parseFloat(
+          currentTrimBackgroundPositionY.replace("%", "")
+        );
+
+        // トリミングモード中のキャラプレビューも更新
+        trimmingModeCharPreview.style.backgroundImage = `url('${characterImageSrc}')`;
+        trimmingModeCharPreview.style.backgroundSize =
+          currentTrimBackgroundSize;
+        trimmingModeCharPreview.style.backgroundPosition = `${currentTrimBackgroundPositionX} ${currentTrimBackgroundPositionY}`;
+      }
+
+      // ページの読み込み時に初期表示を更新
+      updateDisplay();
+      updateProgressBar();
+      updateTotalElapsedTimeDisplay();
+
+      // 初期ロード時にキャラクター位置とサイズを適用
+      characterDisplay.style.right = `${100 - charPositionXSlider.value}%`;
+      characterDisplay.style.bottom = `${charPositionYSlider.value}%`;
+      characterImageWrapper.style.width = `${charSizeSlider.value}px`;
+      characterImageWrapper.style.height = `${charSizeSlider.value}px`;
+      characterImageWrapper.style.backgroundImage = `url('${characterImageSrc}')`; // 初期画像を設定
+
+      // 丸トリミングが選択されている場合は、初期ロード時に適用
+      if (
+        document.querySelector('input[name="char-display-mode"]:checked')
+          .value === "rounded"
+      ) {
+        characterImageWrapper.classList.add("rounded");
+        characterImageWrapper.style.backgroundSize = currentTrimBackgroundSize;
+        characterImageWrapper.style.backgroundPosition = `${currentTrimBackgroundPositionX} ${currentTrimBackgroundPositionY}`;
+      }
+      // 初期ロード時にトリミングモード中のキャラプレビューも設定
+      trimmingModeCharPreview.style.backgroundImage = `url('${characterImageSrc}')`;
+      trimmingModeCharPreview.style.backgroundSize = currentTrimBackgroundSize;
+      trimmingModeCharPreview.style.backgroundPosition = `${currentTrimBackgroundPositionX} ${currentTrimBackgroundPositionY}`;
+
+      if (navigator.serviceWorker) {
+        navigator.serviceWorker.register("/service-worker.js");
+      }
+    </script>
+  </body>
+</html>
