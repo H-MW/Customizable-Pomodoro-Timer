@@ -2,7 +2,7 @@
   "name": "Customizable Pomodoro Timer",
   "short_name": "timer",
   "display": "standalone",
-  "start_url": "index.html",
+  "start_url": "./index.html",
   "icons": [
     {
       "src": "/icon.jpg",
